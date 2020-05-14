@@ -5,21 +5,31 @@ Since logind is the predominant session manager this is kinda the 'current state
 Note that I did not read any source-code. So everything here could be wrong, if the available documentation disagress with the code.
 I had two ways of figuring stuff out: 
 1. Reading blogs and systemd doc
-1. Poking my own system and looking for clues 
+1. Poking my own system and looking for clues
+
+If I got anything wrong and you have better facts please file and issue! I would gladly accpet PRs or suggestions, 
+if you want to improve the text (I am sadly not a really good writer).
+
+I might sound a bit negative in parts of the following text. I would like to emphasize that logind has introduced a lot of cool features 
+that make the desktop multi-user experience better. But understanding how stuff works is the first step on making stuff even better. I hope
+this can make the journey of understanding logind easier for others.
 
 ## Big picture
-So session management needs to work on a number of different things to work correctly. Lets first try to formulate the goal session management tries to achieve.
+So session management needs to work on a number of different things to work correctly. 
+Lets first try to formulate the goal logind tries to achieve with session management, to get some overview over what we are dealing with. 
+After that we can get into the details.
 
 * A `User` should be able to login on a `Loginmanager`. This should put the `User` into a newly created `Session`. 
 * The login could happen on a set of hardware (as opposed to loggin in over ssh or something similar). Lets call this set of hardware a `Seat`.
-* This seat should be accessible to this session and not be available to other sessions until this session releases the seat.
-* The `SessionManager` needs to keep track of the sessions and their assigned seats. It also watches for exited sessions and reclaims their seats.
+* This `Seat` should be accessible to this session and not be available to other sessions until this session releases the `Seat`.
+* The `SessionManager` needs to keep track of the sessions and their assigned seats. It also watches for exited sessions and reclaims their `Seat`s.
 * The `SessionManager` can remove a session from a seat and give access to another session if needed.
 
 Immediatly we have a whole bunch of concepts session management needs to deal with. All of this has of course many details that need to be talked about. This will be the next few sections.
 
 ## Lets get detailed!
-In the following sections I will describe in a lot of detail how the stuff in the "big picture" section work.
+In the following sections I will describe in a lot of detail how the stuff in the "big picture" section work. I tried to make them as separate as possible, 
+some forward/back references were unavoidable though. I hope this is still readable to anyone that is not me.
 
 ### Users
 Users and their identification and authentification are luckily out of the scope of session management. We expect this to be handled by something else. Logind
