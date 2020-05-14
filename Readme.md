@@ -2,30 +2,31 @@
 This document tries to collect all info I can gather about the workings and magic of session management, as performed by logind.
 Since logind is the predominant session manager this is kinda the 'current state of the art".
 
-Note that I did not read any source-code. So everything here could be wrong, if the available documentation disagress with the code.
+Note that I did not read any source-code. So everything here could be wrong, if the available documentation disagrees with the code.
 I had two ways of figuring stuff out: 
 1. Reading blogs and systemd doc
 1. Poking my own system and looking for clues
 
-If I got anything wrong and you have better facts please file and issue! I would gladly accpet PRs or suggestions, 
+If I got anything wrong and you have better facts please file and issue! I would gladly accept PRs or suggestions, 
 if you want to improve the text (I am sadly not a really good writer).
 
 I might sound a bit negative in parts of the following text. I would like to emphasize that logind has introduced a lot of cool features 
-that make the desktop multi-user experience better. But understanding how stuff works is the first step on making stuff even better. I hope
+that make the linux desktop multi-user experience better. Understanding how stuff works is the first step on making stuff even better and I hope
 this can make the journey of understanding logind easier for others.
 
 ## Big picture
-So session management needs to work on a number of different things to work correctly. 
+So session management needs to work on a number of different things to be useful. 
 Lets first try to formulate the goal logind tries to achieve with session management, to get some overview over what we are dealing with. 
 After that we can get into the details.
 
 * A `User` should be able to login on a `Loginmanager`. This should put the `User` into a newly created `Session`. 
-* The login could happen on a set of hardware (as opposed to loggin in over ssh or something similar). Lets call this set of hardware a `Seat`.
+* The login could happen on a set of hardware (as opposed to logging in over ssh or something similar). Lets call this set of hardware a `Seat`.
 * This `Seat` should be accessible to this session and not be available to other sessions until this session releases the `Seat`.
 * The `SessionManager` needs to keep track of the sessions and their assigned seats. It also watches for exited sessions and reclaims their `Seat`s.
 * The `SessionManager` can remove a session from a seat and give access to another session if needed.
 
-Immediatly we have a whole bunch of concepts session management needs to deal with. All of this has of course many details that need to be talked about. This will be the next few sections.
+Now we have a whole bunch of concepts session management needs to deal with. All of this has of course many details that need to be talked about. 
+This is what the next sections will be about.
 
 ## Lets get detailed!
 In the following sections I will describe in a lot of detail how the stuff in the "big picture" section work. I tried to make them as separate as possible, 
@@ -33,14 +34,15 @@ some forward/back references were unavoidable though. I hope this is still reada
 
 ### Users
 Users and their identification and authentification are luckily out of the scope of session management. We expect this to be handled by something else. Logind
-requires PAM to be used anyways so probably some PAM module will be used to authenticate a users when he logs in.
+requires PAM to be used anyways so probably some PAM module will be used to authenticate a user when he logs in.
 
 
 ### Seats
 Reasoning about which hardware belongs to which seat is hard. Thats why logind does not do it. This is part of udev. I still want to talk about it because there
-is one weird interaction between user ACLs set by logind and udev.
+is a weird interaction between user ACLs set by logind and udev.
 
-Ok so shot intro for udev: linux exposes a very messy and complicated device file tree. Udev looks at it and makes some sense out of it and provides a simpler 
+Ok so short intro for udev: linux exposes a very messy and complicated device file tree in `/sys/devices`. 
+Udev looks at it and makes some sense out of it and provides a simpler 
 abstraction. It also has a collection of device-ids, vendor-ids, etc... that help it classify these devices. It then creates device files in /dev for you to 
 interact with the devices (or device drivers). It also listens to events that indicate new/removed devices and takes appropriate actions.
 
@@ -50,12 +52,12 @@ same seat as their tagged parent. There is also the `seat-master` tag that makes
 
 There is another relevant tag: `uaccess`. When trying to find out what that tag means I stumbled upon this gem of an issue on the systemd repo: [Document the uaccess mechanism / dynamic device permissions](https://github.com/systemd/systemd/issues/4288) which is open since 2016. Documenting stuff is hard.
 
-So after searching the net for the doc that systemd doesnt provide I found [this link from 2012](https://enotty.pipebreaker.pl/2012/05/23/linux-automatic-user-acl-management/). It shows how udev at that time runs a command `/usr/lib/systemd/systemd-uaccess $env{DEVNAME} $env{ID_SEAT}` for each device 
+So after searching the net for the doc that systemd doesnt provide I found [this link from 2012](https://enotty.pipebreaker.pl/2012/05/23/linux-automatic-user-acl-management/). It shows how udev at that time ran a command `/usr/lib/systemd/systemd-uaccess $env{DEVNAME} $env{ID_SEAT}` for each device 
 with the tag `uaccess`. This utility does not exist anymore (at least not on my arch installation) but I am guessing that something similar is still happening.
-What that command did is creating the appropriate ACLs base on which seat the device was assigned to.
+What that command apparently did is creating the appropriate ACLs based on which seat the device was assigned to.
 
 So logind is not the only entity granting users access to devices but udev might do that too, when a new device gets plugged in. I hope that is not causing any 
-race conditions...
+races when switching sessions and plugging in devices...
 
 So all devives that are tagged `uaccess` are tagged `seat` but not all `seat` are `uaccess`.
 From what I gathered from poking around in the output of `udevadm info -e` sound output devices and video cards are the only devices marked `uaccess`.
@@ -80,7 +82,7 @@ The CreateSession call [\[1\]](https://www.freedesktop.org/wiki/Software/systemd
 1. What is needed to create a new session
 2. How messy systemd APIs are
 
-There will be a lot of guessing, and me saing I don't know what is happening. I promise the later parts of this document will be better informed. 
+There will be a lot of guessing, and me saying I don't know what is happening. I promise the later parts of this document will be better informed. 
 There are more and better sources on other parts of loginds inner workings. If anyone can shed light on what some of the more mysterious 
 parameters do please let me know!
 
@@ -180,13 +182,14 @@ The summary is:
 Logind can open these devices and only logind needs to run with eleviated priviliges. Everything else needs to go through logind to get access to devices (at least for input. There are some exceptions, where devices are accessible to normal users.)
 
 #### Libinput
-Now, X11 and Wayland compositors do not themselves deal with devices. Both rely on abstractions. 
-X11 has multiple input drivers (a libinput based one exists and is widely used), while wayland relies solely on libinput.
+X11 and Wayland compositors do not themselves deal with device files. Both rely on abstractions. 
+X11 has multiple input drivers (a libinput based one exists and is widely used), while wayland compositors seem to solely rely on libinput. 
+For this to work libinput needs to get access to the device files. But libinput does not depend on logind. So how does that work?
 
-Libinput normally doesn't care about sessions and whatnot, it just cares about getting device-input from the kernel to the user of the library. It does
+Libinput doesn't care about sessions and whatnot, it just cares about getting device-input from the kernel to the user of the library. It does
 provide a convenient notion of `seats` from udev which allows the user to get events from the whole seat instead of handling all devices separatly.
 
-It makes the user to open a devices themselves though, side-stepping the whole permission problems and handing them to the user of the library. The user needs 
+It makes the user open a devices themselves, side-stepping the whole permission problems and handing them to the user of the library. The user needs 
 to provide a function called `open_restricted` which returns a filedescriptor for a given device path. This way we can integrate logind support without 
 libinput directly depending on logind. 
 
