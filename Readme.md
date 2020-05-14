@@ -3,8 +3,9 @@ This document tries to collect all info I can gather about the workings and magi
 Since logind is the predominant session manager this is kinda the 'current state of the art".
 
 Note that I did not read any source-code. So everything here could be wrong, if the available documentation disagrees with the code.
-I had two ways of figuring stuff out: 
-1. Reading blogs and systemd doc
+I had three ways of figuring stuff out: 
+1. Reading blogs
+1. Reading man pages
 1. Poking my own system and looking for clues
 
 If I got anything wrong and you have better facts please file and issue! I would gladly accept PRs or suggestions, 
@@ -233,6 +234,8 @@ belongs to which session, and we also can easily use inotify to get the needed n
 [WHICH ARE SYSTEMD PROPERTY AND IF YOU DARE TOUCH THEM YOU ARE A BAD PERSON](https://www.freedesktop.org/wiki/Software/systemd/ControlGroupInterface/))
 
 # Sources
+These are the main sources. Scattered over the text there are some more links. Man pages were a source of information too.
+
 * \[1\] https://www.freedesktop.org/wiki/Software/systemd/logind/
 * \[2\] https://www.freedesktop.org/wiki/Software/systemd/writing-display-managers/
 * \[3\] https://dvdhrm.wordpress.com/2013/08/25/sane-session-switching/
