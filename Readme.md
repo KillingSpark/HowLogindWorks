@@ -8,7 +8,7 @@ I had three ways of figuring stuff out:
 1. Reading man pages
 1. Poking my own system and looking for clues
 
-If I got anything wrong and you have better facts please file and issue! I would gladly accept PRs or suggestions, 
+If I got anything wrong and you have better facts, please file and issue! I would gladly accept PRs or suggestions,
 if you want to improve the text (I am sadly not a really good writer).
 
 I might sound a bit negative in parts of the following text. I would like to emphasize that logind has introduced a lot of cool features
@@ -16,7 +16,7 @@ that make the linux desktop multi-user experience better. Understanding how stuf
 this can make the journey of understanding logind easier for others.
 
 ## Big picture
-So session management needs to work on a number of different things to be useful. 
+So, session management needs to work on a number of different things to be useful.
 Lets first try to formulate the goal logind tries to achieve with session management, to get some overview over what we are dealing with.
 After that we can get into the details.
 
@@ -39,7 +39,7 @@ requires PAM to be used anyways so probably some PAM module will be used to auth
 
 
 ### Seats
-Reasoning about which hardware belongs to which seat is hard. Thats why logind does not do it. This is part of udev. I still want to talk about it because there
+Reasoning about which hardware belongs to which seat is hard. That's why logind does not do it. This is part of udev. I still want to talk about it because there
 is a weird interaction between user ACLs set by logind and udev.
 
 Ok so short intro for udev: linux exposes a very messy and complicated device file tree in `/sys/devices`.
@@ -53,14 +53,14 @@ same seat as their tagged parent. There is also the `seat-master` tag that makes
 
 There is another relevant tag: `uaccess`. When trying to find out what that tag means I stumbled upon this gem of an issue on the systemd repo: [Document the uaccess mechanism / dynamic device permissions](https://github.com/systemd/systemd/issues/4288) which is open since 2016. Documenting stuff is hard.
 
-So after searching the net for the doc that systemd doesnt provide I found [this link from 2012](https://enotty.pipebreaker.pl/2012/05/23/linux-automatic-user-acl-management/). It shows how udev at that time ran a command `/usr/lib/systemd/systemd-uaccess $env{DEVNAME} $env{ID_SEAT}` for each device 
+So, after searching the net for the doc that systemd doesn't provide I found [this link from 2012](https://enotty.pipebreaker.pl/2012/05/23/linux-automatic-user-acl-management/). It shows how udev at that time ran a command `/usr/lib/systemd/systemd-uaccess $env{DEVNAME} $env{ID_SEAT}` for each device
 with the tag `uaccess`. This utility does not exist anymore (at least not on my arch installation) but I am guessing that something similar is still happening.
 What that command apparently did is creating the appropriate ACLs based on which seat the device was assigned to.
 
-So logind is not the only entity granting users access to devices but udev might do that too, when a new device gets plugged in. I hope that is not causing any 
+So, logind is not the only entity granting users access to devices but udev might do that too, when a new device gets plugged in. I hope that is not causing any
 races when switching sessions and plugging in devices...
 
-So all devives that are tagged `uaccess` are tagged `seat` but not all `seat` are `uaccess`.
+So all devices that are tagged `uaccess` are tagged `seat` but not all `seat` are `uaccess`.
 From what I gathered from poking around in the output of `udevadm info -e` sound output devices and video cards are the only devices marked `uaccess`.
 It makes sense that not everyone can open input devices like keyboards (else keylogging would be easy). See in the sections
 below, how access to these devices is realized with logind as a proxy.
@@ -114,7 +114,7 @@ CreateSession(in  u uid,
 
 #### CreateSession in detail
 
-So lets pick that apart. Creating a session needs info about which user that session is being created for, identified by a `uid`. The `pid` is probably
+So, lets pick that apart. Creating a session needs info about which user that session is being created for, identified by a `uid`. The `pid` is probably
 the `root` or `parent` process for this new session. So far this is relatively straight forward.
 
 Now it gets weirder, why is a session associated with a service?
@@ -124,7 +124,7 @@ According to [\[1\]](https://www.freedesktop.org/wiki/Software/systemd/logind/) 
 I don't really get why this is important, a session might switch between text and graphical mode without involving the session manager so that should not really matter.
 
 "Class encodes the session class. It's one of "user" (for normal user sessions), "greeter" (for display manager pseudo-sessions), "lock-screen" (for display lock screens)".
-How are sessions created that are not user? I thought only systemd_pam calls CreateSession. But the greeter and lockscreen probably do not go through a PAM login session do they?
+How are sessions created that are not user? I thought only systemd_pam calls CreateSession. But the greeter and lockscreen probably do not go through a PAM login session, do they?
 
 The `desktop` parameter is entirely undescribed. I guess it was intended to tell logind which DE a user is using and was not needed in the end?
 
@@ -135,16 +135,16 @@ The `vtnr` is necessary for the good old session switching with alt+ctrl+fx ("VT
 There might be more than one session on `seat_id` but only one active one. I always thought that ttyX is always associated with the virtual terminal with
 number X but I might be wrong, so the `tty` parameter encodes that.
 
-`remote`, `remote_user`, and `remote_host` confuse me a little. I thought `remote` would be inferrable from `service`. Maybe not. Why logind is interested in 
+`remote`, `remote_user`, and `remote_host` confuse me a little. I thought `remote` would be inferable from `service`. Maybe not. Why logind is interested in
 the `remote_user` and `remote_host` and how it gets these values is unclear to me.
 
-`properties` is another opaque parameter, probably used to make extensions to the API without actually changing the API. I dont what this might contain.
+`properties` is another opaque parameter, probably used to make extensions to the API without actually changing the API. I don't know what this might contain.
 
 The output is relatively straight forward. I am guessing that the `uid`, `seat_id`, and `vtnr` are only relevant if `existing` is true. How a session would be created a
-second time is unclear to me, it seems like that should rather be an error, but thats a design choice.
+second time is unclear to me, it seems like that should rather be an error, but that's a design choice.
 
 The `fifo_fd` is really interesting to me. I don't know what this is for. Remember this is called by the systemd_pam module. Why does that need another
-way of communicating with logind? I dont even know in which direction this fifo is passing data. 
+way of communicating with logind? I don't even know in which direction this fifo is passing data.
 Is it for pushing events only directed to systemd_pam? Is it for sending more data to logind?
 And if yes: Why does it not use the dbus calling/signaling mechanics, since it is already connected to dbus?
 I would love to know more about this fifo, but I don't, sorry.
@@ -159,7 +159,7 @@ Creating a session with logind has a number of important effects.
     * This means the process that ran the PAM modules is now in a fresh otherwise empty cgroup, that has nothing to do anymore with the cgroup the `LoginManager`
         was in originally.
     * This means if you do not fork+exec before you execute the PAM modules your `LoginManager` is suddenly the session root. This could prove to be problematic
-        for detecting exited sessions. I hope logind checks that no pid is a root for multiple sessions but I did not check that.
+        for detecting exited sessions. I hope logind checks that no pid is a root for multiple sessions, but I did not check that.
     * This is not properly documented in [\[2\]](https://www.freedesktop.org/wiki/Software/systemd/writing-display-managers/). This is mostly concerned with porting
         from ConsoleKit, maybe it was required to have fork+exec there too.
 1. It sets ACLs to some device files, but not all. Which devices and how this is determined will be described in a later section.
@@ -172,7 +172,7 @@ or i3 or whatever it was we originally wanted to start before being sidetracked 
 X11 and wayland need to access devices. To mouse/keyboard/touch/... for input and to screens for output. Traditionally the X11 server needed to get access to them
 by being root and then drop privileges. This is obviously a bad choice since we are starting a session for a user. And that user better not get root access!
 
-In comes logind providing the possibility to start the session completely as the dedicated used and not rely on that process to properly drop privileges.
+In comes logind providing the possibility to start the session completely as the dedicated user and not rely on that process to properly drop privileges.
 This is possible by logind playing device-broker. There is a nice article with good graphics here: [\[3\]](https://dvdhrm.wordpress.com/2013/08/25/sane-session-switching/).
 
 The summary is:
@@ -180,7 +180,7 @@ The summary is:
 1. This process can call `TakeDevice(...)` which returns a filedescriptor
 1. This filedescriptor can be revoked, if this happens the process can call `TakeDevice(...)` again to try to regain access
 
-Logind can open these devices and only logind needs to run with eleviated priviliges. Everything else needs to go through logind to get access to devices (at least for input. There are some exceptions, where devices are accessible to normal users.)
+Logind can open these devices and only logind needs to run with elevated privileges. Everything else needs to go through logind to get access to devices (at least for input. There are some exceptions, where devices are accessible to normal users.)
 
 #### Libinput
 X11 and Wayland compositors do not themselves deal with device files. Both rely on abstractions.
@@ -188,9 +188,9 @@ X11 has multiple input drivers (a libinput based one exists and is widely used),
 For this to work libinput needs to get access to the device files. But libinput does not depend on logind. So how does that work?
 
 Libinput doesn't care about sessions and whatnot, it just cares about getting device-input from the kernel to the user of the library. It does
-provide a convenient notion of `seats` from udev which allows the user to get events from the whole seat instead of handling all devices separatly.
+provide a convenient notion of `seats` from udev which allows the user to get events from the whole seat instead of handling all devices separately.
 
-It makes the user open a devices themselves, side-stepping the whole permission problems and handing them to the user of the library. The user needs 
+It makes the user open a device themselves, side-stepping the whole permission problems and handing them to the user of the library. The user needs
 to provide a function called `open_restricted` which returns a filedescriptor for a given device path. This way we can integrate logind support without
 libinput directly depending on logind.
 
@@ -204,14 +204,14 @@ As an example of how this can be used see these two files from wlroots, a popula
     * uses the logind dbus call `TakeDevice(...)` to open devices and return the filedescriptors
 
 ### Switching Sessions / Removing a Session from a Seat
-Ok so far we were able to log into the system, create a session and be able to use out mouse, keyboard and display to look at funny cat videos on 
+Ok, so far we were able to log into the system, create a session and be able to use out mouse, keyboard and display to look at funny cat videos on
 youtube [example](https://www.youtube.com/watch?v=dQw4w9WgXcQ).
 This is fine and dandy, but our boss is already coming dangerously close to realizing we are not working as much as we should, so we want to prepare a session
 with $SERIOUS_USER and be able to switch to that quickly if he comes around to check in with us.
 
-So we all know how this works, press alt+ctrl+F1 and login again as $SERIOUS_USER, start some busy looking screens and go back to the session with the cat videos.
+So, we all know how this works, press alt+ctrl+F1 and login again as $SERIOUS_USER, start some busy looking screens and go back to the session with the cat videos.
 
-Now it gets tricky. Remember how we said only one session should have access to a seat at a given time? How is this enforced? We cant rely on 
+Now it gets tricky. Remember how we said only one session should have access to a seat at a given time? How is this enforced? We can't rely on
 every session being nice and cooperative and bug-free.
 The filedescriptors for the devices are open, logind gave them to the session. And we cannot close the filedescriptors in other processes. Or can we?
 
@@ -224,9 +224,9 @@ input device filedescriptors have been handed to the session through logind. Whe
 new, fresh filedescriptors.
 
 ### Watching for exiting sessions
-This is a nontrivial part of session management. You need to somehow be able to tell which processes belong to which sesssion be able to receive 
+This is a nontrivial part of session management. You need to somehow be able to tell which processes belong to which session be able to receive
 notifications when they exit. This could probably be done by using the posix sessionids in most cases. But those are not reliable since processes can leave their
-sessions and make a new one. Now we dont know anymore what is going on!
+session and make a new one. Now we don't know anymore what is going on!
 
 That is why logind pushes the first process into a cgroup right at creation of a session. With cgroups we can reliably track which process
 belongs to which session, and we also can easily use inotify to get the needed notifications. Cgroups are nice!
