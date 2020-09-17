@@ -43,32 +43,39 @@ though and I am not sure if Logind actually cares what kind of login/authenticat
 Reasoning about which hardware belongs to which seat is hard. That's why logind does not do it. This is part of udev. I still want to talk about it because there
 is a weird interaction between user ACLs set by logind and udev.
 
-Ok so short intro for udev: linux exposes a very messy and complicated device file tree in `/sys/devices`.
+Ok so short intro for udev: linux exposes a very messy and complicated device file tree in `/sys/devices`, and we don't want to deal with that directly.
 Udev looks at it and makes some sense out of it and provides a simpler
 abstraction. It also has a collection of device-ids, vendor-ids, etc... that help it classify these devices. It then creates device files in /dev for you to
 interact with the devices (or device drivers). It also listens to events that indicate new/removed devices and takes appropriate actions.
 
-Udev also tags devices with useful info. The tags that interest logind are the seat related ones. Udev tags some devices with `seat` if they belong to a seat.
+Here is a TL;DR for the following:
+1. Udev tags devices with seat information, based on rules (see man udev for more info on the rules, it's basically a fancy matching engine)
+1. If a device only has a 'seat' tag but no info about which seat it belongs to, it belongs to seat0
+1. Children of devices that are tagged 'seat' are inherit the 'seat' tag implicitly... (WHY!)
+1. Udev tags some devices with 'uaccess' which means the sessions user should have direct access to that device. This seems to only be applied to some output devices lie sound.
+1. Devices tagged with 'uaccess' seem to be a subset of devices tagged 'seat', or are children of devices tagged 'seat' 
+1. The effects of uaccess are applied by udev itself, not logind
+
+Udev tags devices with useful info. The tags that interest logind are the seat related ones. Udev tags some devices with `seat` if they belong to a seat.
 Which seat is stated in another property of this device. Note that not all sub-devices of a device are tagged with `seat`. This still means that they belong to the
 same seat as their tagged parent. There is also the `seat-master` tag that makes a seat exist (in most cases a monitor / graphics card).
 
 There is another relevant tag: `uaccess`. When trying to find out what that tag means I stumbled upon this gem of an issue on the systemd repo: [Document the uaccess mechanism / dynamic device permissions](https://github.com/systemd/systemd/issues/4288) which is open since 2016. Documenting stuff is hard.
 
-So, after searching the net for the doc that systemd doesn't provide I found [this link from 2012](https://enotty.pipebreaker.pl/2012/05/23/linux-automatic-user-acl-management/). It shows how udev at that time ran a command `/usr/lib/systemd/systemd-uaccess $env{DEVNAME} $env{ID_SEAT}` for each device
+After searching the net for the doc that systemd doesn't provide I found [this link from 2012](https://enotty.pipebreaker.pl/2012/05/23/linux-automatic-user-acl-management/). It shows how udev at that time ran a command `/usr/lib/systemd/systemd-uaccess $env{DEVNAME} $env{ID_SEAT}` for each device
 with the tag `uaccess`. This utility does not exist anymore (at least not on my arch installation) but I am guessing that something similar is still happening.
 What that command apparently did is creating the appropriate ACLs based on which seat the device was assigned to.
 
-So, logind is not the only entity granting users access to devices but udev might do that too, when a new device gets plugged in. I hope that is not causing any
+This means logind is not the only entity granting users access to devices but udev might do that too, when a new device gets plugged in. I hope that is not causing any
 races when switching sessions and plugging in devices...
 
 So all devices that are tagged `uaccess` are tagged `seat` but not all `seat` are `uaccess`.
 From what I gathered from poking around in the output of `udevadm info -e` sound output devices and video cards are the only devices marked `uaccess`.
 It makes sense that not everyone can open input devices like keyboards (else keylogging would be easy). See in the sections
-below, how access to these devices is realized with logind as a proxy.
+below, how access to these devices is realized with logind as a proxy. Or you can have a look at [this page](https://dvdhrm.wordpress.com/2013/08/25/sane-session-switching/), which explains this too and has some cool pictures
 
 How exactly multi-seat is done in udev-rules is not clear to me. I think an admin has to manually make rules to say which device belongs to which seat. Otherwise
 all devices belong to the default seat `seat0`.
-
 
 ### Create a session on login
 Having Users and Seat management out of the way, we can start worrying about the stuff we really want to do: create and manage sessions!
