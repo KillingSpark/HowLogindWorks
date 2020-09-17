@@ -35,7 +35,8 @@ some forward/back references were unavoidable though. I hope this is still reada
 
 ### Users
 Users and their identification and authentification are luckily out of the scope of session management. We expect this to be handled by something else. Logind
-requires PAM to be used anyways so probably some PAM module will be used to authenticate a user when he logs in.
+expects PAM to be used, and most linux distros include PAM, so probably some PAM module will be used to authenticate a user when he logs in. This is (as far as I know) not required
+though and I am not sure if Logind actually cares what kind of login/authentication mechanism is used, as long as it behaves similarly to the systemd_pam module.
 
 
 ### Seats
@@ -225,13 +226,31 @@ new, fresh filedescriptors.
 
 ### Watching for exiting sessions
 This is a nontrivial part of session management. You need to somehow be able to tell which processes belong to which session be able to receive
-notifications when they exit. This could probably be done by using the posix sessionids in most cases. But those are not reliable since processes can leave their
-session and make a new one. Now we don't know anymore what is going on!
+notifications when they exit. This could probably be done by using the posix sessionids in most cases. 
+
+But those are not reliable since processes can leave their session and make a new one. Now we don't know anymore what is going on!
+This seems counter-intuitive at first, but it actually makes sense when thinking about (maybe the main) usecase for posix sessions: shells!
+You want your shell to be it's own session, so it can have control over all it's spawned children and switch fore-/background tasks. But you also want
+you shell to be able to spawn new shells (e.g. if you run tmux to spawn multiple sessions).
+
+Cgroups are a bit different in this regard. They are not meant to be manipulated by the processes themselves. Processes should not care about cgroups at all,
+since they most likely cant do anything to change the restrictions that they place on them, and if the permissions on the pseudo-filesystem are managed the right way,
+cgroups provide a reliable way to track which process was started in which group of processes, e.g. a session. 
 
 That is why logind pushes the first process into a cgroup right at creation of a session. With cgroups we can reliably track which process
 belongs to which session, and we also can easily use inotify to get the needed notifications. Cgroups are nice!
 (as long as no root user fiddles around with those cgroups
-[WHICH ARE SYSTEMD PROPERTY AND IF YOU DARE TOUCH THEM YOU ARE A BAD PERSON](https://www.freedesktop.org/wiki/Software/systemd/ControlGroupInterface/))
+[WHICH ARE SYSTEMD PROPERTY AND IF YOU DARE TOUCH THEM YOU ARE A BAD PERSON](https://www.freedesktop.org/wiki/Software/systemd/ControlGroupInterface/)).
+
+What systemd does is not really magical though. Sessions belong to users, and systemd has a concept to track processes not actually started by systemd itself: scopes.
+So it opens a scope in the slice of that user using this naming scheme:
+```
+/sys/fs/cgroup/unified/user.slice/user-{{UID}}.slice/session-{{SessionID}}.scope
+```
+For example, the session I am currently writing this from is:
+```
+/sys/fs/cgroup/unified/user.slice/user-1000.slice/session-2.scope
+```
 
 # Sources
 These are the main sources. Scattered over the text there are some more links. Man pages were a source of information too.
