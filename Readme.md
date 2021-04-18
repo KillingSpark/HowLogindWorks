@@ -151,12 +151,9 @@ the `remote_user` and `remote_host` and how it gets these values is unclear to m
 The output is relatively straight forward. I am guessing that the `uid`, `seat_id`, and `vtnr` are only relevant if `existing` is true. How a session would be created a
 second time is unclear to me, it seems like that should rather be an error, but that's a design choice.
 
-The `fifo_fd` is really interesting to me. I don't know what this is for. Remember this is called by the systemd_pam module. Why does that need another
-way of communicating with logind? I don't even know in which direction this fifo is passing data.
-Is it for pushing events only directed to systemd_pam? Is it for sending more data to logind?
-And if yes: Why does it not use the dbus calling/signaling mechanics, since it is already connected to dbus?
-I would love to know more about this fifo, but I don't, sorry.
-Maybe it is used to communicate with a whole other component that gets passed the other end of the fifo, but I cannot guess what that would be.
+The `fifo_fd` is used to detect when the process owning the PAM session exits.
+logind passes one end of a FIFO to the pam_systemd plugin which doesn't really do anything with it, the pipe is just open for the lifetime of the process that invoked the plugin.
+When logind gets a notification that the pipe is closed, it knows that the session is definitely over, even if the process just died suddenly.
 
 #### Effects of creating a session
 Creating a session with logind has a number of important effects.
