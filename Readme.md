@@ -1,3 +1,5 @@
+'TESTSTSTSTTST
+
 # How does Logind work
 This document tries to collect all info I can gather about the workings and magic of session management, as performed by logind.
 Since logind is the predominant session manager this is kinda the 'current state of the art".
